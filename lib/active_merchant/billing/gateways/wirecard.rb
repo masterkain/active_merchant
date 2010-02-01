@@ -3,13 +3,14 @@ require 'base64'
 module ActiveMerchant #:nodoc:
   module Billing #:nodoc:
     class WirecardGateway < Gateway
-      # Test server location
+      # Test server location.
       TEST_URL = 'https://c3-test.wirecard.com/secure/ssl-gateway'
 
-      # Live server location
+      # Live server location.
       LIVE_URL = 'https://c3.wirecard.com/secure/ssl-gateway'
 
-      # The Namespaces are not really needed, because it just tells the System, that there's actually no namespace used.
+      # The Namespaces are not really needed, because it just tells the System,
+      # that there's actually no namespace used.
       # It's just specified here for completeness.
       ENVELOPE_NAMESPACES = {
         'xmlns:xsi' => 'http://www.w3.org/1999/XMLSchema-instance',
@@ -20,43 +21,47 @@ module ActiveMerchant #:nodoc:
 
       RETURN_CODES = %w[ ACK NOK ]
 
-      # Wirecard only allows phone numbers with a format like this: +xxx(yyy)zzz-zzzz-ppp, where:
+      # Wirecard only allows phone numbers with a format like this:
+      #   +xxx(yyy)zzz-zzzz-ppp
+      # where:
       #   xxx = Country code
       #   yyy = Area or city code
       #   zzz-zzzz = Local number
       #   ppp = PBX extension
-      # For example, a typical U.S. or Canadian number would be "+1(202)555-1234-739" indicating PBX extension 739 at phone
-      # number 5551234 within area code 202 (country code 1).
+      # For example, a typical U.S. or Canadian number would be "+1(202)555-1234-739"
+      # indicating PBX extension 739 at phone number 5551234 within area code
+      # 202 (country code 1).
       VALID_PHONE_FORMAT = /\+\d{1,3}(\(?\d{3}\)?)?\d{3}-\d{4}-\d{3}/
 
-      # The countries the gateway supports merchants from as 2 digit ISO country codes
+      # The countries the gateway supports merchants from as 2 digit ISO country codes.
       # TODO: Check supported countries
       self.supported_countries = ['DE']
 
       # Wirecard supports all major credit and debit cards:
       # Visa, Mastercard, American Express, Diners Club,
       # JCB, Switch, VISA Carte Bancaire, Visa Electron and UATP cards.
-      # They also support the latest anti-fraud systems such as Verified by Visa or Master Secure Code.
+      # They also support the latest anti-fraud systems such as Verified by Visa
+      # or Master Secure Code.
       self.supported_cardtypes = [
         :visa, :master, :american_express, :diners_club, :jcb, :switch
       ]
 
-      # The homepage URL of the gateway
+      # The homepage URL of the gateway.
       self.homepage_url = 'http://www.wirecard.com'
 
-      # The name of the gateway
+      # The name of the gateway.
       self.display_name = 'Wirecard'
 
-      # The currency should normally be EUROs
+      # The currency should normally be EURO.
       self.default_currency = 'EUR'
 
       # 100 is 1.00 Euro
       self.money_format = :cents
 
       def initialize(options = {})
-        # verify that username and password are supplied
+        # Verify that username and password are supplied.
         requires!(options, :login, :password)
-        # unfortunately Wirecard also requires a BusinessCaseSignature in the XML request
+        # Wirecard also requires a BusinessCaseSignature in the XML request.
         requires!(options, :signature)
         @options = options
         super
@@ -67,7 +72,7 @@ module ActiveMerchant #:nodoc:
         @options[:test] || super
       end
 
-      # Authorization
+      # Authorization.
       def authorize(money, creditcard, options = {})
         prepare_options_hash(options)
         @options[:credit_card] = creditcard
@@ -75,8 +80,7 @@ module ActiveMerchant #:nodoc:
         commit(request)
       end
 
-
-      # Capture Authorization
+      # Capture Authorization.
       def capture(money, authorization, options = {})
         prepare_options_hash(options)
         @options[:authorization] = authorization
@@ -84,8 +88,7 @@ module ActiveMerchant #:nodoc:
         commit(request)
       end
 
-
-      # Purchase
+      # Purchase.
       def purchase(money, creditcard, options = {})
         prepare_options_hash(options)
         @options[:credit_card] = creditcard
@@ -100,47 +103,50 @@ module ActiveMerchant #:nodoc:
           setup_address_hash!(options)
         end
 
-        # Create all address hash key value pairs so that
-        # it still works if only provided with one or two of them
+        # Create all address hash key value pairs so that it still works if
+        # only provided with one or two of them.
+        # Also include Email in address Hash from options Hash.
         def setup_address_hash!(options)
-          options[:billing_address] = options[:billing_address] || options[:address] || {}
+          options[:billing_address]  = options[:billing_address] || options[:address] || {}
           options[:shipping_address] = options[:shipping_address] || {}
-          # Include Email in address-hash from options-hash
           options[:billing_address][:email] = options[:email] if options[:email]
         end
 
-        # Contact WireCard, make the XML request, and parse the
-        # reply into a Response object
+        # Contact WireCard, make the XML request, and parse the reply into a
+        # Response object.
         def commit(request)
-          headers = { 'Content-Type' => 'text/xml',
-                      'Authorization' => encoded_credentials }
+          headers = {
+            'Content-Type'  => 'text/xml',
+            'Authorization' => encoded_credentials
+          }
 
           response = parse(ssl_post(test? ? TEST_URL : LIVE_URL, request, headers))
-          # Pending Status also means Acknowledged (as stated in their specification)
+          # Pending Status also means Acknowledged (as stated in their specification).
           success = response[:FunctionResult] == "ACK" || response[:FunctionResult] == "PENDING"
           message = response[:Message]
           authorization = (success && @options[:action] == :authorization) ? response[:GuWID] : nil
 
-          Response.new(success, message, response,
-                       :test => test?,
-                       :authorization => authorization,
-                       :avs_result => { :code => response[:avsCode] },
-                       :cvv_result => response[:cvCode]
-                       )
+          Response.new(
+            success, message, response,
+            :test => test?,
+            :authorization => authorization,
+            :avs_result => { :code => response[:avsCode] },
+            :cvv_result => response[:cvCode]
+          )
         end
 
-        # Generates the complete xml-message, that gets sent to the gateway
+        # Generates the complete XML message, that gets sent to the gateway.
         def build_request(action, money, options = {})
           xml = Builder::XmlMarkup.new :indent => 2
           xml.instruct!
           xml.tag! 'WIRECARD_BXML' do
             xml.tag! 'W_REQUEST' do
               xml.tag! 'W_JOB' do
-                # TODO: OPTIONAL, check what value needs to be insert here
+                # TODO: OPTIONAL, check what value needs to be insert here.
                 xml.tag! 'JobID', 'test dummy data'
-                # UserID for this transaction
+                # UserID for this transaction.
                 xml.tag! 'BusinessCaseSignature', options[:signature] || options[:login]
-                # Create the whole rest of the message
+                # Create the whole rest of the message.
                 add_transaction_data(xml, action, money, options)
               end
             end
@@ -148,7 +154,7 @@ module ActiveMerchant #:nodoc:
           xml.target!
         end
 
-        # Includes the whole transaction data (payment, creditcard, address)
+        # Includes the whole transaction data (payment, creditcard, address).
         def add_transaction_data(xml, action, money, options = {})
           options[:action] = action
           # TODO: require order_id instead of auto-generating it if not supplied
@@ -156,7 +162,7 @@ module ActiveMerchant #:nodoc:
           transaction_type = action.to_s.upcase
 
           xml.tag! "FNC_CC_#{transaction_type}" do
-            # TODO: OPTIONAL, check which param should be used here
+            # TODO: OPTIONAL, check which param should be used here.
             xml.tag! 'FunctionID', options[:description] || 'Test dummy FunctionID'
 
             xml.tag! 'CC_TRANSACTION' do
@@ -172,7 +178,7 @@ module ActiveMerchant #:nodoc:
           end
         end
 
-        # Includes the payment (amount, currency, country) to the transaction-xml
+        # Includes the payment (amount, currency, country) to the transaction XML.
         def add_invoice(xml, money, options)
           xml.tag! 'Amount', amount(money)
           xml.tag! 'Currency', options[:currency] || currency(money)
@@ -182,7 +188,7 @@ module ActiveMerchant #:nodoc:
           end
         end
 
-        # Includes the credit-card data to the transaction-xml
+        # Includes the credit card data to the transaction XML.
         def add_creditcard(xml, creditcard)
           raise "Creditcard must be supplied!" if creditcard.nil?
           xml.tag! 'CREDIT_CARD_DATA' do
@@ -194,7 +200,7 @@ module ActiveMerchant #:nodoc:
           end
         end
 
-        # Includes the IP address of the customer to the transaction-xml
+        # Includes the IP address of the customer to the transaction XML.
         def add_customer_data(xml, options)
           return unless options[:ip]
           xml.tag! 'CONTACT_DATA' do
@@ -202,7 +208,7 @@ module ActiveMerchant #:nodoc:
           end
         end
 
-        # Includes the address to the transaction-xml
+        # Includes the address to the transaction XML.
         def add_address(xml, address)
           return if address.nil?
           xml.tag! 'CORPTRUSTCENTER_DATA' do
@@ -237,16 +243,17 @@ module ActiveMerchant #:nodoc:
             parse_error(response, root)
           else
             response[:Message] = "No valid XML response message received. \
-                                Propably wrong credentials supplied with HTTP header."
+                                  Probably wrong credentials supplied with HTTP header."
           end
 
           response
         end
 
-        # Parse the <ProcessingStatus> Element which containts all important information
+        # Parse the <ProcessingStatus> Element which containts all important
+        # informations.
         def parse_response(response, root)
           status = nil
-          # get the root element for this Transaction
+          # Get the root element for this Transaction
           root.elements.to_a.each do |node|
             if node.name =~ /FNC_CC_/
               status = REXML::XPath.first(node, "CC_TRANSACTION/PROCESSING_STATUS")
@@ -257,7 +264,7 @@ module ActiveMerchant #:nodoc:
             if info = status.elements['Info']
               message << info.text
             end
-            # Get basic response information
+            # Get basic response information.
             status.elements.to_a.each do |node|
               response[node.name.to_sym] = (node.text || '').strip
             end
@@ -266,9 +273,9 @@ module ActiveMerchant #:nodoc:
           response[:Message] = message
         end
 
-        # Parse a generic error response from the gateway
+        # Parse a generic error response from the gateway.
         def parse_error(root, message = "")
-          # Get errors if available and append them to the message
+          # Get errors if available and append them to the message.
           errors = errors_to_string(root)
           unless errors.strip.blank?
             message << ' - ' unless message.strip.blank?
@@ -278,7 +285,7 @@ module ActiveMerchant #:nodoc:
         end
 
         # Parses all <ERROR> elements in the response and converts the information
-        # to a single string
+        # to a single string.
         def errors_to_string(root)
           # Get context error messages (can be 0..*)
           errors = []
@@ -291,7 +298,7 @@ module ActiveMerchant #:nodoc:
             end
             errors << error
           end
-          # Convert all messages to a single string
+          # Convert all messages to a single string.
           string = ''
           errors.each do |error|
             string << error[:Message]
@@ -305,8 +312,8 @@ module ActiveMerchant #:nodoc:
           string
         end
 
-        # Encode login and password in Base64 to supply as HTTP header
-        # (for http basic authentication)
+        # Encode login and password in Base64 to supply as HTTP header for
+        # HTTP basic authentication.
         def encoded_credentials
           credentials = [@options[:login], @options[:password]].join(':')
           "Basic " << Base64.encode64(credentials).strip
