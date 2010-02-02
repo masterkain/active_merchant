@@ -112,8 +112,7 @@ module ActiveMerchant #:nodoc:
           options[:billing_address][:email] = options[:email] if options[:email]
         end
 
-        # Contact WireCard, make the XML request, and parse the reply into a
-        # Response object.
+        # Contact WireCard, make the XML request, and parse the reply into a Response object.
         def commit(request)
           headers = {
             'Content-Type'  => 'text/xml',
@@ -154,32 +153,57 @@ module ActiveMerchant #:nodoc:
           xml.target!
         end
 
-        # Includes the whole transaction data (payment, creditcard, address).
+        # Includes the whole transaction data:
+        #   +payment_informations+
+        #   +credit_card+
+        #   +address+
         def add_transaction_data(xml, action, money, options = {})
-          options[:action] = action
-          # TODO: require order_id instead of auto-generating it if not supplied
+          # FIXME: require order_id instead of auto-generating it if not supplied
           options[:order_id] ||= generate_unique_id
+
+          # Supported Wirecard transaction types:
+          #   :preauthorization
+          #   :capture_preauthorization
+          #   :preauthorization_supplement
+          #   :capture_preauthorization_supplement
+          #   :authorization
+          #   :authorization_check
+          #   :capture_authorization
+          #   :purchase
+          #   :notification
+          #   :bookback
+          #   :reversal
+          #   :original_credits
+          #   :query
+          #   :refund
+          options[:action] = action
           transaction_type = action.to_s.upcase
 
           xml.tag! "FNC_CC_#{transaction_type}" do
-            # TODO: OPTIONAL, check which param should be used here.
-            xml.tag! 'FunctionID', options[:description] || 'Test dummy FunctionID'
+            # This ID is reserved for merchant system data and can be used for
+            # tracking purposes. Although it is optional meaning that it does
+            # not have to contain data, the element itself (<FunctionID> </FunctionID>)
+            # must still be provided in the XML request.
+            # Omitting the element will result in a response error.
+            xml.tag! 'FunctionID', options[:description] || 'No FunctionID set'
 
             xml.tag! 'CC_TRANSACTION' do
               xml.tag! 'TransactionID', options[:order_id]
+
               if [:authorization, :purchase].include?(action)
-                add_invoice(xml, money, options)
-                add_creditcard(xml, options[:credit_card])
-                add_address(xml, options[:billing_address])
+                add_payment_informations(xml, money, options)
+                add_credit_card(xml, options[:credit_card])
+                add_billing_address(xml, options[:billing_address])
               elsif action == :capture_authorization
                 xml.tag! 'GuWID', options[:authorization] if options[:authorization]
               end
+
             end
           end
         end
 
         # Includes the payment (amount, currency, country) to the transaction XML.
-        def add_invoice(xml, money, options)
+        def add_payment_informations(xml, money, options)
           xml.tag! 'Amount', amount(money)
           xml.tag! 'Currency', options[:currency] || currency(money)
           xml.tag! 'CountryCode', options[:billing_address][:country]
@@ -189,7 +213,7 @@ module ActiveMerchant #:nodoc:
         end
 
         # Includes the credit card data to the transaction XML.
-        def add_creditcard(xml, creditcard)
+        def add_credit_card(xml, creditcard)
           raise "Creditcard must be supplied!" if creditcard.nil?
           xml.tag! 'CREDIT_CARD_DATA' do
             xml.tag! 'CreditCardNumber', creditcard.number
@@ -209,7 +233,7 @@ module ActiveMerchant #:nodoc:
         end
 
         # Includes the address to the transaction XML.
-        def add_address(xml, address)
+        def add_billing_address(xml, address)
           return if address.nil?
           xml.tag! 'CORPTRUSTCENTER_DATA' do
             xml.tag! 'ADDRESS' do
