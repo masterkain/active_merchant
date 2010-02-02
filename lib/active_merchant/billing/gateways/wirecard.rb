@@ -72,15 +72,33 @@ module ActiveMerchant #:nodoc:
         @options[:test] || super
       end
 
-      # Authorization.
-      def authorize(money, creditcard, options = {})
+      # 6.5 Authorization.
+      # During a card authorization, the transaction information is sent to Wirecard,
+      # which in turn sends the information to the cardholder’s issuing financial institution.
+      # An Authorization is not a guarantee of payment. It only confirms that
+      # the card exists and that funds are available at the time of Authorization
+      # to cover a purchase amount. The funds are not credited at this time but
+      # the Authorization reduces the available credit limit for that card, so
+      # in a sense the funds are reserved for the purchase.
+      def authorize(money, credit_card, options = {})
         prepare_options_hash(options)
-        @options[:credit_card] = creditcard
+        @options[:credit_card] = credit_card
         request = build_request(:authorization, money, @options)
         commit(request)
       end
 
-      # Capture Authorization.
+      # 6.7 Capture Authorization.
+      # Wirecard supports two types of Capture Authorization, one which is
+      # related to a previous authorization of the captured amount
+      # (i.e. a capture request message which contains a reference to the initial
+      # Authorization request), and one which has no connection to a previous
+      # authorization and is therefore sent without reference in the XML code.
+
+      # A Capture Authorization request must include a valid GuWID referencing
+      # the previous Authorization request. The transaction amount which is to
+      # be captured must be identical to the amount authorized, if both transaction
+      # types are processed in real-time.
+      # The GuWID is references in this method as the second parameter.
       def capture(money, authorization, options = {})
         prepare_options_hash(options)
         @options[:authorization] = authorization
@@ -88,10 +106,19 @@ module ActiveMerchant #:nodoc:
         commit(request)
       end
 
-      # Purchase.
-      def purchase(money, creditcard, options = {})
+      # 6.8 Purchase.
+      # A purchase request both authorizes and settles the requested amount
+      # against the card indicated. Through authorizing, the Transaction request
+      # confirms that the card exists and that funds are available at the time
+      # of Authorization to cover the transaction amount. The funds are not
+      # credited at this time but the Authorization reduces the available credit
+      # limit for that card, so in a sense the funds are “reserved” for the purchase.
+      # Through settlement, the purchase request completes the transaction -
+      # the issuing financial institution credits the merchant’s bank account
+      # with the funds for the purchase and updates the cardholder’s statement.
+      def purchase(money, credit_card, options = {})
         prepare_options_hash(options)
-        @options[:credit_card] = creditcard
+        @options[:credit_card] = credit_card
         request = build_request(:purchase, money, @options)
         commit(request)
       end
@@ -127,10 +154,10 @@ module ActiveMerchant #:nodoc:
 
           Response.new(
             success, message, response,
-            :test => test?,
+            :test          => test?,
             :authorization => authorization,
-            :avs_result => { :code => response[:avsCode] },
-            :cvv_result => response[:cvCode]
+            :avs_result    => { :code => response[:avsCode] },
+            :cvv_result    => response[:cvCode]
           )
         end
 
@@ -213,14 +240,14 @@ module ActiveMerchant #:nodoc:
         end
 
         # Includes the credit card data to the transaction XML.
-        def add_credit_card(xml, creditcard)
-          raise "Creditcard must be supplied!" if creditcard.nil?
+        def add_credit_card(xml, credit_card)
+          raise "Credit card must be supplied!" if credit_card.nil?
           xml.tag! 'CREDIT_CARD_DATA' do
-            xml.tag! 'CreditCardNumber', creditcard.number
-            xml.tag! 'CVC2', creditcard.verification_value
-            xml.tag! 'ExpirationYear', creditcard.year
-            xml.tag! 'ExpirationMonth', format(creditcard.month, :two_digits)
-            xml.tag! 'CardHolderName', [creditcard.first_name, creditcard.last_name].join(' ')
+            xml.tag! 'credit_cardNumber', credit_card.number
+            xml.tag! 'CVC2', credit_card.verification_value
+            xml.tag! 'ExpirationYear', credit_card.year
+            xml.tag! 'ExpirationMonth', format(credit_card.month, :two_digits)
+            xml.tag! 'CardHolderName', [credit_card.first_name, credit_card.last_name].join(' ')
           end
         end
 
