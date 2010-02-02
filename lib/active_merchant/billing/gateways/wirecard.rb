@@ -74,7 +74,7 @@ module ActiveMerchant #:nodoc:
 
       # 6.5 Authorization.
       # During a card authorization, the transaction information is sent to Wirecard,
-      # which in turn sends the information to the cardholder’s issuing financial institution.
+      # which in turn sends the information to the cardholder's issuing financial institution.
       # An Authorization is not a guarantee of payment. It only confirms that
       # the card exists and that funds are available at the time of Authorization
       # to cover a purchase amount. The funds are not credited at this time but
@@ -114,8 +114,8 @@ module ActiveMerchant #:nodoc:
       # credited at this time but the Authorization reduces the available credit
       # limit for that card, so in a sense the funds are “reserved” for the purchase.
       # Through settlement, the purchase request completes the transaction -
-      # the issuing financial institution credits the merchant’s bank account
-      # with the funds for the purchase and updates the cardholder’s statement.
+      # the issuing financial institution credits the merchant's bank account
+      # with the funds for the purchase and updates the cardholder's statement.
       def purchase(money, credit_card, options = {})
         prepare_options_hash(options)
         @options[:credit_card] = credit_card
@@ -234,7 +234,32 @@ module ActiveMerchant #:nodoc:
           xml.tag! 'Amount', amount(money)
           xml.tag! 'Currency', options[:currency] || currency(money)
           xml.tag! 'CountryCode', options[:billing_address][:country]
+          # A recurring transaction describes a payment where the cardholder's
+          # account is periodically charged for a repeated delivery and use of
+          # a product or service (subscription, membership fee, etc.) over time.
+          # A recurring transaction consists of an initial request
+          # (which is identical in form and content to a single request) and
+          # one or several repeated transaction request messages.
+          # The "+Initial+" request message (which in most cases is an Authorization)
+          # contains all relevant card and cardholder data, while the subsequent
+          # "+Repeated+" message (which can be another Authorization, or a Capture or a Purchase)
+          # simply references an identifier (the Global Unique Wirecard ID)
+          # which is returned with the response message to the initial request.
+
+          # Recurring transaction types:
+          #   :purchase
+          #   :authorization
+          #   :preauthorization
           xml.tag! 'RECURRING_TRANSACTION' do
+            # Recurring options:
+            #   +'Initial'+
+            #   +'Single'+
+            #   +'Repeated'+
+
+            # NOTE: If the payment card data of a customer has changed, all
+            # data must be re-submitted in form of an 'initial' transaction.
+            # The system will generate a new reference GuWID which must be used
+            # for all subsequent transactions by this cardholder.
             xml.tag! 'Type', options[:recurring] || 'Single'
           end
         end
