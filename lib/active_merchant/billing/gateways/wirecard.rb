@@ -229,7 +229,7 @@ module ActiveMerchant #:nodoc:
           end
         end
 
-        # Includes the payment (amount, currency, country) to the transaction XML.
+        # Includes the payment (amount, currency, options) to the transaction XML.
         def add_payment_informations(xml, money, options)
           xml.tag! 'Amount', amount(money)
           xml.tag! 'Currency', options[:currency] || currency(money)
@@ -268,7 +268,7 @@ module ActiveMerchant #:nodoc:
         def add_credit_card(xml, credit_card)
           raise "Credit card must be supplied!" if credit_card.nil?
           xml.tag! 'CREDIT_CARD_DATA' do
-            xml.tag! 'credit_cardNumber', credit_card.number
+            xml.tag! 'CreditCardNumber', credit_card.number
             xml.tag! 'CVC2', credit_card.verification_value
             xml.tag! 'ExpirationYear', credit_card.year
             xml.tag! 'ExpirationMonth', format(credit_card.month, :two_digits)
