@@ -269,7 +269,7 @@ module ActiveMerchant #:nodoc:
           # which is returned with the response message to the initial request.
 
           # This is the ISO 3166-1 code of the country where the transaction takes place.
-          # It is mandatory if the type of transaction is ‘Single’ or ‘Initial’.
+          # It is mandatory if the type of transaction is 'Single' or 'Initial'.
           xml.tag! 'CountryCode', options[:billing_address][:country]
 
           # Recurring transaction types:
