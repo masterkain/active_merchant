@@ -121,7 +121,7 @@ module ActiveMerchant #:nodoc:
       # the previous Authorization request. The transaction amount which is to
       # be captured must be identical to the amount authorized, if both transaction
       # types are processed in real-time.
-      # The GuWID is references in this method as the second parameter.
+      # The GuWID is referenced in this method as the second parameter.
       def capture(money, authorization, options = {})
         prepare_options_hash(options)
         @options[:authorization] = authorization
@@ -192,6 +192,9 @@ module ActiveMerchant #:nodoc:
           )
         end
 
+        # Merchant tracking tags:
+        #   JobID, FunctionID, TransactionID
+
         # Generates the complete XML message, that gets sent to the gateway.
         def build_request(action, money, options = {})
           xml = Builder::XmlMarkup.new :indent => 2
@@ -199,8 +202,13 @@ module ActiveMerchant #:nodoc:
           xml.tag! 'WIRECARD_BXML' do
             xml.tag! 'W_REQUEST' do
               xml.tag! 'W_JOB' do
-                # TODO: OPTIONAL, check what value needs to be insert here.
-                xml.tag! 'JobID', 'test dummy data'
+                # This ID is reserved for merchant system data and can be used for
+                # tracking purposes. Although it is optional meaning that it does
+                # not have to contain data, the element itself (<JobID> </JobID>)
+                # must still be provided in the XML request. Omitting the
+                # element will result in a response error.
+                # Be easy on ASCII chars here.
+                xml.tag! 'JobID', options[:job_id] || 'No JobID set'
                 # This is the unique merchant identifier against which the request is made.
                 xml.tag! 'BusinessCaseSignature', options[:signature] || options[:login]
                 # Create the whole rest of this message.
@@ -217,7 +225,12 @@ module ActiveMerchant #:nodoc:
         #   +address+
         def add_transaction_data(xml, action, money, options = {})
           # FIXME: require order_id instead of auto-generating it if not supplied
-          options[:order_id] ||= generate_unique_id
+          options[:order_id]  ||= generate_unique_id
+          # Recurring options:
+          #   +'Single'+
+          #   +'Initial'+
+          #   +'Repeated'+
+          options[:recurring] ||= 'Single'
 
           # Supported Wirecard transaction types:
           #   :preauthorization
@@ -262,12 +275,29 @@ module ActiveMerchant #:nodoc:
               xml.tag! 'CommerceType', options[:commerce_type] || 'eCommerce'
 
               case action
-                when :authorization, :purchase, :authorization_check
+                when :authorization, :authorization_check
+                  add_payment_informations(xml, money, options)
+                  add_credit_card(xml, options[:credit_card])
+                  add_billing_address(xml, options[:billing_address])
+                when :purchase
+                  # This is the GuWID of an associated initial transaction.
+                  # It is mandatory if the transaction type is ‘Repeated’.
+                  if options[:recurring] == 'Repeated' && options[:authorization]
+                    xml.tag! 'GuWID', options[:authorization]
+                  else
+                    raise("Cannot process a repeated payment without a GuWID")
+                  end
                   add_payment_informations(xml, money, options)
                   add_credit_card(xml, options[:credit_card])
                   add_billing_address(xml, options[:billing_address])
                 when :capture_authorization, :reversal
-                  xml.tag! 'GuWID', options[:authorization] if options[:authorization]
+                  # NOTE: we are assuming that the amount requested through a prior
+                  # authorization is the same when capturing or reversing.
+                  # This is important.
+                  xml.tag! 'GuWID', options[:authorization]
+                  # NOTE: the usage field for the capture overrides the field value provided
+                  # with the authorization. This feature is not supported by all the acquirers.
+                  xml.tag! 'Usage', options[:usage] if options[:usage]
               end
 
             end
@@ -283,7 +313,7 @@ module ActiveMerchant #:nodoc:
           # differs from the amount of the related ‘Initial’ transaction.
           # For all other recurring transactions, this element is optional.
           xml.tag! 'Amount', amount(money)
-          
+
           # This is the ISO 4217 currency code used for the transaction.
           # It is mandatory if the type of transaction is ‘Single’ or ‘Initial’
           # or if the currency of a ‘Repeated’ transaction differs from the currency
@@ -322,15 +352,11 @@ module ActiveMerchant #:nodoc:
           # for a repeated transaction by the merchant (e.g. monthly membership).
           # This collection must be provided if the transaction is ‘Initial’ or ‘Repeated’.
           xml.tag! 'RECURRING_TRANSACTION' do
-            # Recurring options:
-            #   +'Single'+
-            #   +'Initial'+
-            #   +'Repeated'+
             # NOTE: If the payment card data of a customer has changed, all
             # data must be re-submitted in form of an 'initial' transaction.
             # The system will generate a new reference GuWID which must be used
             # for all subsequent transactions by this cardholder.
-            xml.tag! 'Type', options[:recurring] || 'Single'
+            xml.tag! 'Type', options[:recurring]
           end
         end
 
