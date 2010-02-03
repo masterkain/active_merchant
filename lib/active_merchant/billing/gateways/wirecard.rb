@@ -87,6 +87,29 @@ module ActiveMerchant #:nodoc:
         commit(request)
       end
 
+      # 6.6 Authorization Check.
+      # Wirecard also supports the transaction type FNC_CC_AUTHORIZATION_CHECK.
+      # In addition to the default Luhn Check, an algorithm which verifies a
+      # credit card number against its check digit, the Authorization Check
+      # allows merchants to validate credit cards used in online transactions
+      # in real-time against the database of the card issuing bank.
+      # This transaction request type cannot be sent with the transaction
+      # mode type initial available with recurring transactions and installment transactions.
+
+      # The Authorization Check is almost identical to the Authorization request
+      # described in the previous section. The only thing that sets it apart
+      # from a standard Authorization is that the amount specified in this
+      # check request is not reserved for a later Capture Authorization but
+      # automatically reversed. As the name indicates, an Authorization Check
+      # is a verification of the credit card only and does not replace the
+      # standard Authorization request.
+      def check(money, credit_card, options = {})
+        prepare_options_hash(options)
+        @options[:credit_card] = credit_card
+        request = build_request(:authorization_check, money, @options)
+        commit(request)
+      end
+
       # 6.7 Capture Authorization.
       # Wirecard supports two types of Capture Authorization, one which is
       # related to a previous authorization of the captured amount
@@ -217,7 +240,7 @@ module ActiveMerchant #:nodoc:
             xml.tag! 'CC_TRANSACTION' do
               xml.tag! 'TransactionID', options[:order_id]
 
-              if [:authorization, :purchase].include?(action)
+              if [:authorization, :purchase, :authorization_check].include?(action)
                 add_payment_informations(xml, money, options)
                 add_credit_card(xml, options[:credit_card])
                 add_billing_address(xml, options[:billing_address])
@@ -233,7 +256,6 @@ module ActiveMerchant #:nodoc:
         def add_payment_informations(xml, money, options)
           xml.tag! 'Amount', amount(money)
           xml.tag! 'Currency', options[:currency] || currency(money)
-          xml.tag! 'CountryCode', options[:billing_address][:country]
           # A recurring transaction describes a payment where the cardholder's
           # account is periodically charged for a repeated delivery and use of
           # a product or service (subscription, membership fee, etc.) over time.
@@ -245,6 +267,10 @@ module ActiveMerchant #:nodoc:
           # "+Repeated+" message (which can be another Authorization, or a Capture or a Purchase)
           # simply references an identifier (the Global Unique Wirecard ID)
           # which is returned with the response message to the initial request.
+
+          # This is the ISO 3166-1 code of the country where the transaction takes place.
+          # It is mandatory if the type of transaction is ‘Single’ or ‘Initial’.
+          xml.tag! 'CountryCode', options[:billing_address][:country]
 
           # Recurring transaction types:
           #   :purchase
