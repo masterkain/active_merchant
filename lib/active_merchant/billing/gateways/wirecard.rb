@@ -145,6 +145,14 @@ module ActiveMerchant #:nodoc:
         request = build_request(:purchase, money, @options)
         commit(request)
       end
+      
+      # 6.11 Reversal.
+      def void(authorization, options = {})
+        prepare_options_hash(options)
+        @options[:authorization] = authorization
+        request = build_request(:reversal, money, @options)
+        commit(request)
+      end
 
       private
 
@@ -244,7 +252,7 @@ module ActiveMerchant #:nodoc:
                 add_payment_informations(xml, money, options)
                 add_credit_card(xml, options[:credit_card])
                 add_billing_address(xml, options[:billing_address])
-              elsif action == :capture_authorization
+              elsif action == :capture_authorization || :reversal
                 xml.tag! 'GuWID', options[:authorization] if options[:authorization]
               end
 
