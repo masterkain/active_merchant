@@ -252,7 +252,7 @@ module ActiveMerchant #:nodoc:
                 add_payment_informations(xml, money, options)
                 add_credit_card(xml, options[:credit_card])
                 add_billing_address(xml, options[:billing_address])
-              elsif action == :capture_authorization || :reversal
+              elsif action == :capture_authorization || action == :reversal
                 xml.tag! 'GuWID', options[:authorization] if options[:authorization]
               end
 
