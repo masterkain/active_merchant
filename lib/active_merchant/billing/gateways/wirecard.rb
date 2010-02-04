@@ -147,9 +147,13 @@ module ActiveMerchant #:nodoc:
       end
 
       # 6.11 Reversal.
-      def void(authorization, options = {})
+      # For a reversal request, a valid GuWID from a previous request is required.
+      # The amount defined in the ‘reversal’ request has to match the amount given
+      # in the respective request that needs to be cancelled.
+      def void(authorization, money, options = {})
         prepare_options_hash(options)
         @options[:authorization] = authorization
+        requires!(options, :transaction_id)
         request = build_request(:reversal, money, @options)
         commit(request)
       end
@@ -224,8 +228,9 @@ module ActiveMerchant #:nodoc:
         #   +credit_card+
         #   +address+
         def add_transaction_data(xml, action, money, options = {})
-          # FIXME: require order_id instead of auto-generating it if not supplied
-          options[:order_id]  ||= generate_unique_id
+          # This is a unique ID associated with a single transaction, which is
+          # created by the merchant and submitted as part of the request.
+          options[:transaction_id] ||= generate_unique_id
           # Recurring options:
           #   +'Single'+
           #   +'Initial'+
@@ -264,7 +269,7 @@ module ActiveMerchant #:nodoc:
               # This is a unique ID associated with a single transaction, which
               # is created by the merchant and submitted as part of the request.
               # Mandatory.
-              xml.tag! 'TransactionID', options[:order_id]
+              xml.tag! 'TransactionID', options[:transaction_id]
               # The default setting of this element is eCommerce. If you like
               # to have your CommerceType set to MOTO or CustomerPresent,
               # please contact Wirecard support to have these options activated.
