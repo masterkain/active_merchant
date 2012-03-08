@@ -259,7 +259,6 @@ module ActiveMerchant #:nodoc:
           errors.add :verification_value, "is required" unless verification_value?
         end
       end
-
     end
   end
 end
