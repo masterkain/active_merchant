@@ -1,7 +1,7 @@
 module ActiveMerchant #:nodoc:
   module Billing #:nodoc:
     class ViaklixGateway < Gateway
-      class_inheritable_accessor :test_url, :live_url, :delimiter, :actions
+      class_attribute :test_url, :live_url, :delimiter, :actions
 
       self.test_url = 'https://demo.viaklix.com/process.asp'
       self.live_url = 'https://www.viaklix.com/process.asp'
@@ -14,7 +14,7 @@ module ActiveMerchant #:nodoc:
       
       APPROVED = '0'
       
-      self.supported_cardtypes = [:visa, :master, :american_express]
+      self.supported_cardtypes = [:visa, :master, :american_express, :discover]
       self.supported_countries = ['US']
       self.display_name = 'ViaKLIX'
       self.homepage_url = 'http://viaklix.com'

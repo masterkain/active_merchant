@@ -134,7 +134,7 @@ module ActiveMerchant #:nodoc:
       self.ssl_strict = false
       
       self.supported_countries = ['US']
-      self.supported_cardtypes = [:visa, :master, :american_express, :discover]
+      self.supported_cardtypes = [:visa, :master, :american_express, :discover, :jcb, :diners_club]
       self.homepage_url = 'http://www.linkpoint.com/'
       self.display_name = 'LinkPoint'
            
@@ -233,12 +233,17 @@ module ActiveMerchant #:nodoc:
       # 
       # identification must be a valid order id previously submitted by SALE
       #
-      def credit(money, identification, options = {})
+      def refund(money, identification, options = {})
         options.update(
           :ordertype => "CREDIT",
           :order_id => identification
         )
         commit(money, nil, options)
+      end
+
+      def credit(money, identification, options = {})
+        deprecated CREDIT_DEPRECATION_MESSAGE
+        refund(money, identification, options)
       end
     
       def test?
